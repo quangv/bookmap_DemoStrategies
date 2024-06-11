@@ -5,6 +5,7 @@ import velox.api.layer1.annotations.Layer1ApiVersion;
 import velox.api.layer1.annotations.Layer1ApiVersionValue;
 import velox.api.layer1.annotations.Layer1Attachable;
 import velox.api.layer1.annotations.Layer1StrategyName;
+import velox.api.layer1.annotations.Layer1TradingStrategy;
 
 /**
  * This class is not annotated with @Layer1MultiAccountTradingSupported, so no multiple account data
@@ -15,6 +16,7 @@ import velox.api.layer1.annotations.Layer1StrategyName;
  */
 @Layer1Attachable
 @Layer1StrategyName("No Multiple Account Support Demo")
+@Layer1TradingStrategy
 @Layer1ApiVersion(Layer1ApiVersionValue.VERSION2)
 public class NoMultipleAccountSupportDemo extends MultipleAccountSupportDemoBase {
     
