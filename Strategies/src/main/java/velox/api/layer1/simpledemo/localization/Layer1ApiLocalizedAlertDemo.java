@@ -1,7 +1,5 @@
 package velox.api.layer1.simpledemo.localization;
 
-import static velox.api.layer1.simpledemo.localization.LocalizedBundleImplDemoStrategies.DEMO_STRATEGIES_BUNDLE_NAME;
-
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -36,7 +34,7 @@ import velox.gui.utils.localization.LocalizedBundle;
  * Explore this demo to understand how to localize your addon.
  */
 @Layer1Attachable
-@Layer1LocalizationBundle(DEMO_STRATEGIES_BUNDLE_NAME)
+@Layer1LocalizationBundle(Layer1ApiLocalizedAlertDemo.LOCALIZED_BUNDLE_NAME)
 @Layer1StrategyName(value = "Alert localized demo", localizationKey = "Layer1ApiLocalizedAlertDemo.Name")
 @Layer1ApiVersion(Layer1ApiVersionValue.VERSION2)
 public class Layer1ApiLocalizedAlertDemo implements
@@ -47,14 +45,17 @@ public class Layer1ApiLocalizedAlertDemo implements
     Layer1ApiInstrumentAdapter,
     Layer1ApiAdminAdapter,
     Layer1LocalizationInterface {
+    
+    public static final String LOCALIZED_BUNDLE_NAME = "resources.locale.LocalizedAlertDemoBundle";
 
     private final Layer1ApiProvider provider;
-
+    
+    private final Set<String> instruments = new HashSet<>();
+    private final ConcurrentHashMap<String, Layer1ApiSoundAlertDeclarationMessage> registeredDeclarations = new ConcurrentHashMap<>();
+    
     private LocalizedSendAlertPanel sendAlertPanel;
     private LocalizedDeclareOrUpdateAlertPanel declareOrUpdateAlertPanel;
-
-    private Set<String> instruments = new HashSet<>();
-    private ConcurrentHashMap<String, Layer1ApiSoundAlertDeclarationMessage> registeredDeclarations = new ConcurrentHashMap<>();
+    
     private Layer1ApiAlertGuiMessage guiDeclarationMessage;
     
     private LocalizedBundle localizedBundle;
@@ -68,7 +69,7 @@ public class Layer1ApiLocalizedAlertDemo implements
     
     @Override
     public void acceptLocalizedBundleProvider(LocalizedBundleProvider localizedBundleProvider) {
-        localizedBundle = localizedBundleProvider.getBundle(DEMO_STRATEGIES_BUNDLE_NAME);
+        localizedBundle = localizedBundleProvider.getBundle(LOCALIZED_BUNDLE_NAME);
         
         sendAlertPanel = new LocalizedSendAlertPanel(this, localizedBundle);
         sendAlertPanel.setEnabled(false);
