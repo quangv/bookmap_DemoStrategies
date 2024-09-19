@@ -199,7 +199,7 @@ public class TradingMessagesSenderSettingsPanel extends StrategyPanel {
     private JComponent getDisabledPanel() {
         StrategyPanel panel = new StrategyPanel("Strategy is disabled");
         panel.setLayout(new FlowLayout(FlowLayout.LEFT));
-        JLabel label = new JLabel("Enable the 'TradingMessagesDemo' checkbox to activate this add-on.");
+        JLabel label = new JLabel(String.format("<html>Enable the '%s' checkbox to activate<br>this add-on.</html>", TradingMessagesSender.NAME));
         panel.setVisible(!this.isWorking.get());
         panel.add(label);
         return panel;
