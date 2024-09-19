@@ -1,23 +1,5 @@
 package velox.api.layer1.simpledemo.multipleaccount;
 
-import java.awt.Color;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-import java.util.function.Consumer;
-import javax.swing.JButton;
-import javax.swing.JComboBox;
-import javax.swing.JFrame;
-import javax.swing.JLabel;
-import javax.swing.JScrollPane;
-import javax.swing.JTable;
-import javax.swing.SwingConstants;
-import javax.swing.SwingUtilities;
-import javax.swing.WindowConstants;
-import javax.swing.table.DefaultTableModel;
 import velox.api.layer1.Layer1ApiAdminAdapter;
 import velox.api.layer1.Layer1ApiFinishable;
 import velox.api.layer1.Layer1ApiInstrumentListener;
@@ -51,6 +33,26 @@ import velox.api.layer1.messages.indicators.IndicatorLineStyle;
 import velox.api.layer1.messages.indicators.Layer1ApiUserMessageModifyIndicator;
 import velox.api.layer1.messages.indicators.StrategyUpdateGenerator;
 import velox.api.layer1.providers.helper.TargetedRequestHelper;
+import velox.gui.BookmapScrollPane;
+
+import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JScrollPane;
+import javax.swing.JTable;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+import javax.swing.WindowConstants;
+import javax.swing.table.DefaultTableModel;
+import java.awt.Color;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Consumer;
 
 
 /**
@@ -258,7 +260,7 @@ public class MultipleAccountSupportDemoBase implements
         
         JTable tableOrders = new JTable();
         tableOrders.setModel(ordersTableModel);
-        JScrollPane tableOrdersScrollPane = new JScrollPane(tableOrders);
+        JScrollPane tableOrdersScrollPane = new BookmapScrollPane(tableOrders);
         tableOrdersScrollPane.createHorizontalScrollBar();
         
         GridBagConstraints gbcTableOrdersScrollPane = new GridBagConstraints();
