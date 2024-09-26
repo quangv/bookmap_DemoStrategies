@@ -58,7 +58,7 @@ public class TradingMessagesSender implements
     public void onInstrumentAdded(final String alias, final InstrumentInfo info) {
         SwingUtilities.invokeLater(() -> {
             instruments.put(alias, info);
-            settingsPanel.get().updateInstruments(instruments.keySet().stream().toList());
+            updateInstruments();
         });
     }
 
@@ -66,7 +66,7 @@ public class TradingMessagesSender implements
     public void onInstrumentRemoved(final String alias) {
         SwingUtilities.invokeLater(() -> {
             instruments.remove(alias);
-            settingsPanel.get().updateInstruments(instruments.keySet().stream().toList());
+            updateInstruments();
         });
     }
 
@@ -74,6 +74,7 @@ public class TradingMessagesSender implements
     public StrategyPanel[] getCustomGuiFor(final String alias, final String indicatorName) {
         final TradingMessagesSenderSettingsPanel panel = settingsPanel.updateAndGet(s -> (s != null) ? s : TradingMessagesSenderSettingsPanel.newPanel(NAME, this::sendUserMessage, isWorking));
         settingsPanel.get().updateIfNeeded();
+        updateInstruments();
         return new StrategyPanel[]{panel};
     }
 
@@ -92,5 +93,11 @@ public class TradingMessagesSender implements
 
     private void sendUserMessage(Object data) {
         asyncExecutor.execute(() -> provider.sendUserMessage(data));
+    }
+
+    private void updateInstruments() {
+        if (settingsPanel.get() != null) {
+            settingsPanel.get().updateInstruments(instruments.keySet().stream().toList());
+        }
     }
 }
