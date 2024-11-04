@@ -1,5 +1,6 @@
 package velox.api.layer1.simpledemo.localization;
 
+import com.ibm.icu.util.ULocale;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
@@ -30,6 +31,7 @@ import velox.api.layer1.messages.Layer1ApiSoundAlertMessage;
 import velox.gui.StrategyPanel;
 import velox.gui.utils.localization.LocalizationUtils;
 import velox.gui.utils.localization.LocalizedBundle;
+import velox.gui.utils.localization.translatable.TranslatableComponent;
 
 class LocalizedSendAlertPanel extends StrategyPanel {
     
@@ -54,22 +56,23 @@ class LocalizedSendAlertPanel extends StrategyPanel {
         void sendCustomAlert(Layer1ApiSoundAlertMessage message);
     }
     
-    enum SeverityIcons {
-        NONE("LocalizedSendAlertPanel.Enum.None", null),
-        INFO("LocalizedSendAlertPanel.Enum.Info", Layer1DefaultAlertIcons.getInfoIcon()),
-        WARN("LocalizedSendAlertPanel.Enum.Warn", Layer1DefaultAlertIcons.getWarnIcon()),
-        ERROR("LocalizedSendAlertPanel.Enum.Error", Layer1DefaultAlertIcons.getErrorIcon());
+    enum SeverityIcons implements TranslatableComponent {
+        NONE(new LocalizedAlertDemoTranslatableText("LocalizedSendAlertPanel.Enum.None"), null),
+        INFO(new LocalizedAlertDemoTranslatableText("LocalizedSendAlertPanel.Enum.Info"), Layer1DefaultAlertIcons.getInfoIcon()),
+        WARN(new LocalizedAlertDemoTranslatableText("LocalizedSendAlertPanel.Enum.Warn"), Layer1DefaultAlertIcons.getWarnIcon()),
+        ERROR(new LocalizedAlertDemoTranslatableText("LocalizedSendAlertPanel.Enum.Error"), Layer1DefaultAlertIcons.getErrorIcon());
         
-        private final String localizationKey;
+        private final TranslatableComponent text;
         public final Image icon;
     
-        SeverityIcons(String localizationKey, Image icon) {
-            this.localizationKey = localizationKey;
+        SeverityIcons(TranslatableComponent text, Image icon) {
+            this.text = text;
             this.icon = icon;
         }
         
-        String toLocalizedString(LocalizedBundle localizedBundle) {
-            return localizedBundle.getString(localizationKey);
+        @Override
+        public String toLocalizedString(ULocale locale) {
+            return text.toLocalizedString(locale);
         }
     }
 
@@ -231,8 +234,7 @@ class LocalizedSendAlertPanel extends StrategyPanel {
     
         combBoxAlertIcons = new JComboBox<>();
         combBoxAlertIcons.setModel(new DefaultComboBoxModel<>(LocalizedSendAlertPanel.SeverityIcons.values()));
-        combBoxAlertIcons.setRenderer(LocalizationUtils.localizeListCellRenderer(combBoxAlertIcons.getRenderer(),
-                icon -> icon.toLocalizedString(localizedBundle)));
+        combBoxAlertIcons.setRenderer(LocalizationUtils.localizeListCellRenderer(combBoxAlertIcons.getRenderer()));
         comboBoxAlertDeclarations.addItem(new AlertDeclarationComboBoxOption(localizedBundle.getString("LocalizedSendAlertPanel.AlertDeclarationComboBoxOption.None"), null));
         GridBagConstraints gbc_combBoxAlertIcon = new GridBagConstraints();
         gbc_combBoxAlertIcon.insets = new Insets(0, 0, 5, 0);

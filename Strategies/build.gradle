@@ -28,6 +28,8 @@ dependencies {
 
         compileOnly group: 'org.apache.commons', name: 'commons-lang3', version: '3.11'
     }
+    
+    compileOnly group: 'com.ibm.icu', name: 'icu4j', version: '71.1'
 }
 
 jar {
