@@ -31,6 +31,11 @@ public class TradingMessagesSenderSettingsPanel extends StrategyPanel {
         return new TradingMessagesSenderSettingsPanel(name, messageConsumer, isWorking);
     }
     
+    private enum TradingAction {
+        ENABLE,
+        DISABLE
+    }
+    
     private static final String TRADING_ENABLE_TITLE = "Send Trading Enable Message";
     private static final String SET_ORDER_SIZE_TITLE = "Send Set Order Size Message";
     private final boolean initialized;
@@ -90,6 +95,9 @@ public class TradingMessagesSenderSettingsPanel extends StrategyPanel {
 
         JLabel comboBoxTradingEnableAliasesLabel = new JLabel("Select instrument:");
 
+        JLabel actionComboBoxLabel = new JLabel("Select action:");
+        JComboBox<TradingAction> actionComboBox = new JComboBox<>(TradingAction.values());
+
         JLabel modeComboBoxLabel = new JLabel("Select Trading mode:");
         JComboBox<Layer1ApiTradingEnableMessage.Mode> modeComboBox = new JComboBox<>(Layer1ApiTradingEnableMessage.Mode.values());
 
@@ -107,13 +115,24 @@ public class TradingMessagesSenderSettingsPanel extends StrategyPanel {
                 JOptionPane.showMessageDialog(null, "Trading Mode cannot be empty!", "Error", JOptionPane.ERROR_MESSAGE);
                 return;
             }
+
+            boolean enable;
+            try {
+                TradingAction action = (TradingAction) actionComboBox.getSelectedItem();
+                enable = action == TradingAction.ENABLE;
+            } catch (ClassCastException exception) {
+                JOptionPane.showMessageDialog(null, "Action cannot be empty!", "Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
             
             String messageText = "Layer1ApiTradingEnableMessage with alias: " + alias + ", tradingMode: " + tradingMode;
-            messageConsumer.accept(new Layer1ApiTradingEnableMessage(alias, tradingMode, getResponseListener(messageText)));
+            messageConsumer.accept(new Layer1ApiTradingEnableMessage(alias, enable, tradingMode, getResponseListener(messageText)));
         });
 
         tradingEnableBlock.add(comboBoxTradingEnableAliasesLabel);
         tradingEnableBlock.add(comboBoxAliasesTradingEnable);
+        tradingEnableBlock.add(actionComboBoxLabel);
+        tradingEnableBlock.add(actionComboBox);
         tradingEnableBlock.add(modeComboBoxLabel);
         tradingEnableBlock.add(modeComboBox);
         tradingEnableBlock.add(tradingEnableButton);
