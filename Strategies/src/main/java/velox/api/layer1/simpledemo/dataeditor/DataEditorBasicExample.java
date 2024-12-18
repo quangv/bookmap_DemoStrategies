@@ -7,6 +7,7 @@ import velox.api.layer1.Layer1ApiFinishable;
 import velox.api.layer1.Layer1ApiProvider;
 import velox.api.layer1.annotations.Layer1ApiVersion;
 import velox.api.layer1.annotations.Layer1ApiVersionValue;
+import velox.api.layer1.annotations.Layer1InjectionOrder;
 import velox.api.layer1.annotations.Layer1StrategyName;
 import velox.api.layer1.annotations.Layer1UpstreamDataEditor;
 import velox.api.layer1.data.InstrumentInfo;
@@ -15,8 +16,17 @@ import velox.api.layer1.layers.Layer1ApiInjectorRelay;
 import velox.api.layer1.layers.utils.OrderBook;
 import velox.api.layer1.messages.UserMessageLayersChainCreatedTargeted;
 
-/** Offsets depth data and trades 3 levels up and doubles displayed sizes.*/
+/**
+ * Offsets depth data and trades 3 levels up and doubles displayed sizes.<br>
+ * This strategy also uses {@link Layer1InjectionOrder} to specify the order of injection.<br>
+ * If all other strategies has order value greater than -1, this strategy will be injected the lowest
+ * (closest possible to the data provider).<br>
+ * {@link Layer1InjectionOrder} is optional, if you want to have a strict order between some strategies.<br>
+ * If {@link Layer1InjectionOrder} is not specified, the default order value of 0 is used.<br>
+ * @see Layer1InjectionOrder Layer1InjectionOrder docs for more details
+ */
 @Layer1UpstreamDataEditor
+@Layer1InjectionOrder(-1)
 @Layer1StrategyName("Data editor")
 @Layer1ApiVersion(Layer1ApiVersionValue.VERSION2)
 public class DataEditorBasicExample extends Layer1ApiInjectorRelay implements Layer1ApiFinishable {
