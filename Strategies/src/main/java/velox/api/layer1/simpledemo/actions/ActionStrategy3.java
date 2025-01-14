@@ -12,7 +12,6 @@ import velox.api.layer1.annotations.Layer1ApiVersionValue;
 import velox.api.layer1.annotations.Layer1Attachable;
 import velox.api.layer1.annotations.Layer1Injectable;
 import velox.api.layer1.annotations.Layer1StrategyName;
-import velox.api.layer1.common.ListenableHelper;
 
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -46,7 +45,6 @@ public class ActionStrategy3 implements Layer1ApiFinishable, Layer1ApiInstrument
 
     public ActionStrategy3(Layer1ApiProvider provider) {
         this.provider = provider;
-        ListenableHelper.addListeners(provider, this);
     }
     
     @Override
