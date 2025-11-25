@@ -1,8 +1,19 @@
 # Quick start
 
-This repository in general covers entire L1 API, but if you want to start quickly - see `velox.api.layer1.simplified.demo` subpackage - those are "Simplified API" demos, it's the quickest way to get started.
+This repository contains Bookmap API examples and custom indicators including a Moving Average indicator.
 
-Word of caution: please be very careful when using something with real account. Always test in simulation first. Both your code and API might contain bugs, so before you run anything you have modified/wrote/downloaded from somewhere in live - make sure to validate that it works fine in paper trading/simulated environment. Please be aware, that bookmap simulation has unrealistically low latency (everything is done on local machine), so you should do the testing with a server-side demo account before even considering running anything in live.
+## Custom Indicators
+
+### Moving Average Indicator
+
+A fully-featured Moving Average indicator supporting SMA, EMA, and WMA calculation methods. See [Moving Average README](Strategies/src/main/java/velox/api/layer1/simpledemo/movingaverage/README.md) for detailed documentation.
+
+**Features:**
+
+- Multiple MA types (SMA, EMA, WMA)
+- Customizable period, color, and line width
+- Real-time and historical calculations
+- Efficient performance with streaming data
 
 ## Building your adapter
 
@@ -14,11 +25,13 @@ Word of caution: please be very careful when using something with real account. 
 - In `Strategies/build/libs` subfolder (relative to the root of the repository) you should now have `bm-strategies.jar` - those are your indicators and strategies compiled and ready to be loaded into Bookmap
 
 If you have Gradle installed and configured to use the correct Java version, you can simply run these commands:
+
 ```
 git clone https://github.com/BookmapAPI/DemoStrategies.git
 cd DemoStrategies/Strategies
 gradle jar
 ```
+
 And you'll have your jar file that is ready to be loaded inside `build/libs`.
 
 ## Loading into bookmap
@@ -41,8 +54,6 @@ If you are just starting - go for Simplified API. It's much easier, and at least
 
 Core API can do everything that simplified API does (because it's just a wrapper around core), but it is much more complicated. Not just because of having more functionality to deal with, but also because of it being less polished in general - it can do a lot, but some things aren't as clean as those could be. Typically it does provide you tools to achieve the same task more efficiently though.
 
-
-
 # More detailed guide
 
 ## Some terminology confusion
@@ -52,6 +63,7 @@ Initially the API was built mainly for strategies, so you will see quite a few p
 ## General data flow
 
 Bookmap L1 API in general is built around the following idea: there is a chain or layers, each one can do some processing on the data and then might forward it to the next one. It's similar to chain-of-responsibility pattern, but there are few distinctions:
+
 - Data is forwarded further nearly always, meaning that multiple objects can (and usually will) process it.
 - Data flows through the stack in both directions. When something happens in the market (one of the levels changes, or your order gets executed) event goes up the stack. When user does something (requests a subscription to an instrument, sends an order) event travels down the stack.
 - Stack can branch at some points. See the part about attached modules for more details.
@@ -69,6 +81,7 @@ Bookmap relies on one very important assumption: upstream and downstream events 
 ## Main API components
 
 There are few "parts" of L1 API that are worth knowing about:
+
 - Simplified wrapper - great way to create something quickly
 - Core - lets you process events that pass through your module, realtime only
 - Data structure interface - you can ask bookmap to extract recent events from a built-in storage
@@ -85,11 +98,13 @@ It's a built-in wrapper that is actually using many other parts of the API. It p
 Events are fed to your module in the same order as those have happened and you place dots or icons using price-time coordinates.
 
 3 "modes" of operation are supported. Mode will be picked automatically based on interfaces you implement:
+
 - Live only. You get a snapshot when loaded, and then realtime updates are sent.
 - Live+history with mode notification (`HistoricalModeListener`). You get all the events since bookmap started. After you get all historical events you get a notification about switching to realtime data.
 - Live+history without mode notification (`HistoricalDataListener`). Similar to the previous one, but you don't get a notification when data switches to realtime, so it isn't suitable for strategies.
 
 Points that you generate can be stored in one of 2 ways:
+
 - In-memory. Events are stored in memory and can be edited quickly (you can rewrite history). Number of points is limited, older ones start being deleted when there are too many, around 200000 (we avoid deleting all events, but we thin out the older ones, which will decrease the resolution of older data; this is done to prevent excessive memory usage).
 - On disk. That removes the limitation on quantity. Rewriting history isn't supported. This is only possible in "Live+history without mode notification" mode and only if you register a non-modifiable indicator - otherwise in-memory mode will be used automatically.
 
@@ -116,6 +131,7 @@ Sometimes you might want to insert custom events so you can later retrieve those
 _Note that it's fully supported only in 7.1.0 b25 and above. In older builds you have to do some tricks with placing your objects into root classloader in order to make it work._
 
 In order to use it you need to do a few things:
+
 - First you need to define your value class (it describes your points) and aggregation class (it describes an aggregation of your points over certain range).
 - After that you need to define your aggregator. This interface has few methods allowing you to define how individual points are transformed into aggregations and how multiple aggregations can be merged. In other words, you define which information should be saved and which should be discarded when aggregation happens.
 - Than you can register your generator. Send `Layer1ApiUserMessageAddStrategyUpdateGenerator` to do that. It will start being calculated shortly after you send the message.
@@ -134,7 +150,7 @@ Note that there is a checkbox near your module name. By default it will load/unl
 
 ### Indicators extension
 
-As a part of bookmap L1 api you can develop indicators that are displayed over the heatmap or in the panel below it. 
+As a part of bookmap L1 api you can develop indicators that are displayed over the heatmap or in the panel below it.
 Indicators can be registered using `Layer1ApiUserMessageModifyIndicator` (you can use `Layer1ApiUserMessageModifyIndicator.Builder` to create it). There are many parameters controlling various aspects. Examples are the best place to get started (e.g. `Layer1ApiMarkersDemo`).
 
 _Please note that right now style parameters (like line width) do not work for indicators displayed on bottom panel._
@@ -144,11 +160,11 @@ Indicator can show a line (bottom panel or over heatmap), icons (over heatmap on
 Single module can register multiple indicators.
 
 The indicator is described by `OnlineCalculatable` interface which contains two important methods:
+
 - `calculateValuesInRange` - this one will be called when your indicator needs data for a specific time range. Usually it happens when user moves heatmap around. This method does not necessarily have to be very fast. In this method you will usually request aggregated data from a storage and process it.
 - `createOnlineValueCalculator` - this one is intended for calculating indicator values in real time. You will have to provide a calculator that will react on incremental updates recomputing the current value as necessary.
 
 Note that you can invalidate your indicator (trigering `calculateValuesInRange` and then `createOnlineValueCalculator`) at any point if, for example, settings have changed. Or you can just publish new values from your online value calculator using `IndicatorFullValues`.
-
 
 ### Screen space painter extension
 
@@ -180,6 +196,7 @@ Injected modules (marked with `@Layer1Injectable`) are placed between certain st
 Keep in mind that ignoring or modifying upstream events in injected module will often have unwanted side effects due to layer placement - it will be located above the data storage, meaning that those changes won't be persisted; you should use Data editor modules if that's your goal.
 
 Injected modules can do everything attached modules can do. The main benefits are:
+
 - ability to alter downstream events (e.g. reject submission of a risky order, or maybe ask for additional confirmation)
 - control over the exact time when an event will continue going upstream/downstream (before or after your code being executed).
 
@@ -191,7 +208,7 @@ You might want to extend `Layer1ApiRelay` or `Layer1ApiInjectorRelay` when creat
 
 _This mode was added in 7.1_
 
-Data editor modules (marked with `@Layer1UpstreamDataEditor`) are specialized modules that can rewrite upstream events. You can create synthetic instruments, process data in some way (e.g. filter sizes), etc. 
+Data editor modules (marked with `@Layer1UpstreamDataEditor`) are specialized modules that can rewrite upstream events. You can create synthetic instruments, process data in some way (e.g. filter sizes), etc.
 
 It's important to keep in mind that such module **must** return whatever it has changed to initial state when being unloaded. If you created some instruments - delete those, if you filtered out some levels - bring those back. See `DataEditorBasicExample` for an example.
 
@@ -204,6 +221,7 @@ You might want to extend `Layer1ApiRelay` or `Layer1ApiInjectorRelay` when creat
 Near the lowest level of the stack (adapters) there is a layer assigning timestamps and queuing all events. Past that point delays do not change event timestamp - instead those "slow down time", meaning that timeline in Bookmap will start moving slower if bookmap doesn't keep up. It isn't a normal state, but can happen during data bursts if one of the loaded modules is too slow to keep up. Bookmap will try to catch up (including temporarily suspending heatmap rebuild) and, in the case of short-term burst, will recover without losing data as soon as it processes queued events.
 
 In order to avoid that you should consider that the following code is executed inside the main stack. This means that if it's slow - it will slow down the data processing.
+
 - Generators start being executed in the main stack as soon as "historical" part of data is processed.
 - `OnlineValueCalculatorAdapter` returned by `OnlineCalculatable#createOnlineValueCalculator` is executed inside the main stack as soon as it catches up with data (it gets a catch up portion of updates asynchronously right after being created and then is attached to the main stack)
 
@@ -218,10 +236,12 @@ Note that due to limitations imposed by providers you might be unable to receive
 ## Gradle artifacts, Javadoc
 
 As you can see in `build.gradle`, additional repository is added and following artifacts are included:
+
 ```
         compileOnly group: 'com.bookmap.api', name: 'api-core', version: 'x.y.z.b';
         compileOnly group: 'com.bookmap.api', name: 'api-simplified', version: 'x.y.z.b';
 ```
+
 `x.y.z` part is Bookmap version for which module is compiled and `b` is the specific build (see next section for information about compatibility). You can switch to a newer version/build to gain access to newer functionality.
 To avoid conflicts with dependencies Bookmap is using please view **Classloaders, compatibility** section.
 
@@ -245,6 +265,7 @@ You should be able to use any IDE you like as long as it supports Gradle. You mi
 - Working directory will determine where your config folder will be. On Windows you can set `C:\Bookmap`, which is the default during installation, but you can also maintain multiple separate Bookmap configs, if you want.
 - Add `C:\Program Files\Bookmap\Bookmap.jar` to the classpath. It should list the dependencies in manifest, so that will often be enough, but you can include libraries from `C:\Program Files\Bookmap\lib` if Bookmap complains about missing classes.
 - If you are using Java 16 or newer, add the list of `--add-opens` JVM args to your run configuration:
+
 ```
 --add-opens=java.base/java.lang=ALL-UNNAMED
 --add-opens=java.base/java.io=ALL-UNNAMED
@@ -260,9 +281,10 @@ You should be able to use any IDE you like as long as it supports Gradle. You mi
 --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED
 --add-opens=java.desktop/sun.awt.windows=ALL-UNNAMED // this one is needed only for Windows
 ```
-- When started from an IDE on a Windows machine, your Bookmap might look different from what you see when you 
-start it from the desktop shortcut. If you see black areas on a heatmap, this is caused by Java scaling issues.
-To fix this:
+
+- When started from an IDE on a Windows machine, your Bookmap might look different from what you see when you
+  start it from the desktop shortcut. If you see black areas on a heatmap, this is caused by Java scaling issues.
+  To fix this:
   - Find the `java.exe` file of the JDK that you use to start Bookmap from an IDE
   - Right-click on it, go to `Properties -> Compatibility`.
   - Press the `Change high DPI settings` button. In the opened window, check the `Override high DPI scaling behavior. Scaling performed by:` checkbox.
@@ -276,13 +298,13 @@ You can either manually create a run configuration, or modify the configuration 
 ##### Import the built-in run configuration
 
 1. Open the project with IntelliJ IDEA. If it wasn't automatically imported, right-click on `build.gradle` and
-press `Link Gradle Project`.
+   press `Link Gradle Project`.
 2. After the import, you should see a run configuration created, named `BookmapJar`.
 3. Try to start the configuration. If it doesn't work, check that paths to your Bookmap.jar
-and your working directory are correct - you need to update them in `build.gradle` if you changed
-the default installation paths.
+   and your working directory are correct - you need to update them in `build.gradle` if you changed
+   the default installation paths.
 4. You might need to change the project JDK version (in `File -> Project Structure -> SDK`),
-for details on Java version, check out [General tips on running Bookmap with any IDE](#general-tips-on-running-bookmap-with-any-ide).
+   for details on Java version, check out [General tips on running Bookmap with any IDE](#general-tips-on-running-bookmap-with-any-ide).
 
 Note that if you make any changes to this run configuration in your IDE, they will be overwritten on gradle project sync.
 You need to either only modify the config in `build.gradle`, or, after successful import of the config,
@@ -292,7 +314,7 @@ remove it from `build.gradle`.
 
 1. In your module project, create a `JAR Application` run configuration: Navigate `Edit configurations... -> Add New Configuration`, select `JAR Application`
 2. Set 'Path to jar': `C:\Program Files\Bookmap\Bookmap.jar` (note that it might be different on your machine
-if you changed the installation directory)
+   if you changed the installation directory)
 3. Set 'Working directory': `C:\Bookmap\Config`
 4. Set the JDK. Check which JDK version to use in [General tips on running Bookmap with any IDE](#general-tips-on-running-bookmap-with-any-ide).
 5. For Java ver. 16 or newer - add `--add-opens` JVM args - check out [General tips on running Bookmap with any IDE](#general-tips-on-running-bookmap-with-any-ide).
@@ -308,6 +330,7 @@ Also, you may now use the breakpoints.
 Note that the following is only applicable to L1 module, but not the L0.
 
 You might want to avoid packing jar every time you want to make changes. Best way to do it is the following:
+
 - create empty `bm-strategy-package-fs-root.jar` file in a folder where your class files are. E.g. it could be something like `Strategies\build\classes\java\main` (though it will usually be different depending on your IDE). This folder will be passed to URLClassLoader, so it should contain folder(s) matching top level package names, which contain either other folders corresponding to lower level package names or class files, e.g. `HelperStrategySettings.class`.
 - load this file into bookmap as you would normally load your jar file. When empty file named `bm-strategy-package-fs-root.jar` is loaded, bookmap will not actually read the file but instead will load classes from a folder where it is located.
 - file can be deleted after it's loaded into bookmap. Bookmap only relies on the file in file dialog and no longer needs it afterwards.
