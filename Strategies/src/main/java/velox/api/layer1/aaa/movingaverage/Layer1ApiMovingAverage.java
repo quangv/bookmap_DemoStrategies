@@ -50,7 +50,7 @@ public class Layer1ApiMovingAverage implements CustomModule, BarDataListener, Hi
     @Parameter(name = "Color 3")
     public Color color3 = new Color(76, 175, 80); // Green
     
-    @Parameter(name = "MA Type")
+    @Parameter(name = "MA Type (SMA/EMA/WMA)")
     public String maType = "EMA";
     
     @Parameter(name = "Interval (seconds)", step = 1.0)
@@ -80,9 +80,9 @@ public class Layer1ApiMovingAverage implements CustomModule, BarDataListener, Hi
         
         MAType type;
         try {
-            type = MAType.valueOf(maType);
+            type = MAType.valueOf(maType.toUpperCase());
         } catch (IllegalArgumentException e) {
-            Log.warn("QI MA: Invalid MA type '" + maType + "', defaulting to EMA");
+            Log.warn("QI MA: Invalid MA type '" + maType + "', defaulting to EMA. Valid types: SMA, EMA, WMA");
             type = MAType.EMA;
         }
         
@@ -194,20 +194,18 @@ public class Layer1ApiMovingAverage implements CustomModule, BarDataListener, Hi
         }
         
         private double calculateEMA(double price) {
-            priceQueue.offer(price);
-            
-            if (priceQueue.size() < period) {
-                // Calculate SMA for initialization
+            if (Double.isNaN(ema)) {
+                // Initialize with SMA
+                priceQueue.offer(price);
                 sum += price;
-                if (priceQueue.size() == period) {
-                    ema = sum / period;
-                    return ema;
+                
+                if (priceQueue.size() < period) {
+                    return Double.NaN;
                 }
-                return Double.NaN;
-            }
-            
-            if (priceQueue.size() > period) {
-                priceQueue.poll();
+                
+                // First EMA value is SMA
+                ema = sum / period;
+                return ema;
             }
             
             // EMA formula: EMA = (Price - PreviousEMA) * multiplier + PreviousEMA
