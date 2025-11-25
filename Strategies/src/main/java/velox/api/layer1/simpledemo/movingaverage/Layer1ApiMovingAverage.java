@@ -8,15 +8,19 @@ import velox.api.layer1.annotations.Layer1ApiVersion;
 import velox.api.layer1.annotations.Layer1ApiVersionValue;
 import velox.api.layer1.annotations.Layer1SimpleAttachable;
 import velox.api.layer1.annotations.Layer1StrategyName;
+import velox.api.layer1.common.Log;
 import velox.api.layer1.data.InstrumentInfo;
-import velox.api.layer1.data.TradeInfo;
+import velox.api.layer1.layers.utils.OrderBook;
 import velox.api.layer1.messages.indicators.Layer1ApiUserMessageModifyIndicator.GraphType;
 import velox.api.layer1.simplified.Api;
+import velox.api.layer1.simplified.Bar;
+import velox.api.layer1.simplified.BarDataListener;
 import velox.api.layer1.simplified.CustomModule;
+import velox.api.layer1.simplified.HistoricalDataListener;
 import velox.api.layer1.simplified.Indicator;
 import velox.api.layer1.simplified.InitialState;
+import velox.api.layer1.simplified.Intervals;
 import velox.api.layer1.simplified.Parameter;
-import velox.api.layer1.simplified.TradeDataListener;
 import velox.api.layer1.simpledemo.movingaverage.MovingAverageSettings.MAType;
 
 /**
@@ -26,7 +30,7 @@ import velox.api.layer1.simpledemo.movingaverage.MovingAverageSettings.MAType;
 @Layer1SimpleAttachable
 @Layer1StrategyName("QI Moving Average")
 @Layer1ApiVersion(Layer1ApiVersionValue.VERSION2)
-public class Layer1ApiMovingAverage implements CustomModule, TradeDataListener {
+public class Layer1ApiMovingAverage implements CustomModule, BarDataListener, HistoricalDataListener {
     
     @Parameter(name = "Period", step = 1.0)
     public Double period = 20.0;
@@ -37,28 +41,59 @@ public class Layer1ApiMovingAverage implements CustomModule, TradeDataListener {
     @Parameter(name = "Line Color")
     public Color color = new Color(33, 150, 243);
     
+    @Parameter(name = "Interval (seconds)", step = 1.0)
+    public Double intervalSeconds = 5.0;
+    
     private Indicator maIndicator;
     private MovingAverageCalculator calculator;
     
     @Override
     public void initialize(String alias, InstrumentInfo info, Api api, InitialState initialState) {
+        Log.info("QI MA: Initializing for " + alias + ", period=" + period + ", type=" + maType);
         maIndicator = api.registerIndicator("MA", GraphType.PRIMARY);
         maIndicator.setColor(color);
-        MAType type = MAType.valueOf(maType);
+        Log.info("QI MA: Indicator registered, color=" + color);
+        MAType type;
+        try {
+            type = MAType.valueOf(maType);
+        } catch (IllegalArgumentException e) {
+            Log.warn("QI MA: Invalid MA type '" + maType + "', defaulting to EMA");
+            type = MAType.EMA;
+        }
         calculator = new MovingAverageCalculator(period.intValue(), type);
     }
     
     @Override
     public void stop() {
-        // Cleanup if needed
+        Log.info("QI MA: Stopping");
     }
     
     @Override
-    public void onTrade(double price, int size, TradeInfo tradeInfo) {
+    public void onBar(OrderBook orderBook, Bar bar) {
+        if (calculator == null) {
+            Log.warn("QI MA: Calculator is null!");
+            return;
+        }
+        
+        // Use close price from bar
+        double price = bar.getClose();
         double maValue = calculator.addPrice(price);
+        
+        // Log first 5 bars, then every 20th
+        if (calculator.getCount() <= 5 || calculator.getCount() % 20 == 0) {
+            Log.info("QI MA: bar#" + calculator.getCount() + ", close=" + String.format("%.2f", price) + 
+                    ", MA=" + (Double.isNaN(maValue) ? "warming up" : String.format("%.2f", maValue)));
+        }
+        
         if (!Double.isNaN(maValue)) {
             maIndicator.addPoint(maValue);
         }
+    }
+    
+    @Override
+    public long getInterval() {
+        // Convert seconds to nanoseconds
+        return (long)(intervalSeconds * 1_000_000_000L);
     }
     
     /**
@@ -71,6 +106,7 @@ public class Layer1ApiMovingAverage implements CustomModule, TradeDataListener {
         private double sum = 0.0;
         private double ema = Double.NaN;
         private final double multiplier;
+        private int count = 0;
         
         public MovingAverageCalculator(int period, MAType maType) {
             this.period = period;
@@ -79,10 +115,16 @@ public class Layer1ApiMovingAverage implements CustomModule, TradeDataListener {
             this.multiplier = 2.0 / (period + 1.0);
         }
         
+        public int getCount() {
+            return count;
+        }
+        
         public double addPrice(double price) {
             if (Double.isNaN(price)) {
                 return Double.NaN;
             }
+            
+            count++;
             
             switch (maType) {
                 case SMA:
