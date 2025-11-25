@@ -38,7 +38,7 @@ import velox.colors.ColorsChangedListener;
  * Supports SMA, EMA, and WMA calculation methods
  */
 @Layer1Attachable
-@Layer1StrategyName("Moving Average")
+@Layer1StrategyName("QI Moving Average")
 @Layer1ApiVersion(Layer1ApiVersionValue.VERSION2)
 public class Layer1ApiMovingAverage implements
     Layer1ApiFinishable,
