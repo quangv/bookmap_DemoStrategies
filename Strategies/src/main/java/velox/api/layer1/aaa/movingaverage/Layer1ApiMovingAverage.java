@@ -10,6 +10,7 @@ import velox.api.layer1.annotations.Layer1SimpleAttachable;
 import velox.api.layer1.annotations.Layer1StrategyName;
 import velox.api.layer1.common.Log;
 import velox.api.layer1.data.InstrumentInfo;
+import velox.api.layer1.data.TradeInfo;
 import velox.api.layer1.layers.utils.OrderBook;
 import velox.api.layer1.messages.indicators.Layer1ApiUserMessageModifyIndicator.GraphType;
 import velox.api.layer1.simplified.Api;
@@ -21,6 +22,7 @@ import velox.api.layer1.simplified.Indicator;
 import velox.api.layer1.simplified.InitialState;
 import velox.api.layer1.simplified.Intervals;
 import velox.api.layer1.simplified.Parameter;
+import velox.api.layer1.simplified.TradeDataListener;
 import velox.api.layer1.aaa.movingaverage.MovingAverageSettings.MAType;
 
 /**
@@ -30,7 +32,7 @@ import velox.api.layer1.aaa.movingaverage.MovingAverageSettings.MAType;
 @Layer1SimpleAttachable
 @Layer1StrategyName("QI Moving Average")
 @Layer1ApiVersion(Layer1ApiVersionValue.VERSION2)
-public class Layer1ApiMovingAverage implements CustomModule, BarDataListener, HistoricalDataListener {
+public class Layer1ApiMovingAverage implements CustomModule, BarDataListener, HistoricalDataListener, TradeDataListener {
     
     @Parameter(name = "Period 1", step = 1.0)
     public Double period1 = 9.0;
@@ -56,6 +58,9 @@ public class Layer1ApiMovingAverage implements CustomModule, BarDataListener, Hi
     @Parameter(name = "Interval (seconds)", step = 1.0)
     public Double intervalSeconds = 5.0;
     
+    @Parameter(name = "Smooth Lines (interpolate on trades)")
+    public Boolean smoothLines = true;
+    
     private Indicator ma1Indicator;
     private Indicator ma2Indicator;
     private Indicator ma3Indicator;
@@ -63,9 +68,19 @@ public class Layer1ApiMovingAverage implements CustomModule, BarDataListener, Hi
     private MovingAverageCalculator calculator2;
     private MovingAverageCalculator calculator3;
     
+    // For smooth interpolation
+    private double lastMa1Value = Double.NaN;
+    private double lastMa2Value = Double.NaN;
+    private double lastMa3Value = Double.NaN;
+    private double prevMa1Value = Double.NaN;
+    private double prevMa2Value = Double.NaN;
+    private double prevMa3Value = Double.NaN;
+    private long barStartTime = 0;
+    private long barEndTime = 0;
+    
     @Override
     public void initialize(String alias, InstrumentInfo info, Api api, InitialState initialState) {
-        Log.info("QI MA: Initializing for " + alias + ", periods=[" + period1 + "," + period2 + "," + period3 + "], type=" + maType);
+        Log.info("QI MA: Initializing for " + alias + ", periods=[" + period1 + "," + period2 + "," + period3 + "], type=" + maType + ", smoothLines=" + smoothLines);
         
         ma1Indicator = api.registerIndicator("MA" + period1.intValue(), GraphType.PRIMARY);
         ma1Indicator.setColor(color1);
@@ -103,6 +118,10 @@ public class Layer1ApiMovingAverage implements CustomModule, BarDataListener, Hi
             return;
         }
         
+        // Track timing for interpolation
+        barStartTime = barEndTime;
+        barEndTime = System.nanoTime();
+        
         // Use close price from bar
         double price = bar.getClose();
         
@@ -118,15 +137,94 @@ public class Layer1ApiMovingAverage implements CustomModule, BarDataListener, Hi
                     ", MA3=" + (Double.isNaN(ma3Value) ? "warming" : String.format("%.2f", ma3Value)));
         }
         
-        if (!Double.isNaN(ma1Value)) {
-            ma1Indicator.addPoint(ma1Value);
+        // Store previous values for interpolation
+        if (smoothLines) {
+            prevMa1Value = lastMa1Value;
+            prevMa2Value = lastMa2Value;
+            prevMa3Value = lastMa3Value;
+            lastMa1Value = ma1Value;
+            lastMa2Value = ma2Value;
+            lastMa3Value = ma3Value;
         }
-        if (!Double.isNaN(ma2Value)) {
-            ma2Indicator.addPoint(ma2Value);
+        
+        // Only update indicators if smooth lines is disabled
+        // (when enabled, trades will update them)
+        if (!smoothLines) {
+            if (!Double.isNaN(ma1Value)) {
+                ma1Indicator.addPoint(ma1Value);
+            }
+            if (!Double.isNaN(ma2Value)) {
+                ma2Indicator.addPoint(ma2Value);
+            }
+            if (!Double.isNaN(ma3Value)) {
+                ma3Indicator.addPoint(ma3Value);
+            }
         }
-        if (!Double.isNaN(ma3Value)) {
-            ma3Indicator.addPoint(ma3Value);
+    }
+    
+    private int tradeCount = 0;
+    
+    @Override
+    public void onTrade(double price, int size, TradeInfo tradeInfo) {
+        if (!smoothLines) {
+            return; // Only interpolate if smooth lines is enabled
         }
+        
+        // Skip if we don't have MA values yet
+        if (Double.isNaN(lastMa1Value) && Double.isNaN(lastMa2Value) && Double.isNaN(lastMa3Value)) {
+            return;
+        }
+        
+        tradeCount++;
+        
+        // Calculate interpolation ratio based on time within bar
+        long currentTime = System.nanoTime();
+        double ratio = 0.5; // Default to middle if timing not available
+        
+        if (barStartTime > 0 && barEndTime > barStartTime) {
+            long barDuration = barEndTime - barStartTime;
+            long elapsedInBar = currentTime - barEndTime;
+            
+            if (barDuration > 0 && elapsedInBar >= 0) {
+                ratio = Math.min(1.0, (double) elapsedInBar / barDuration);
+            }
+        }
+        
+        // Linear interpolation between previous and current MA values
+        // This creates smooth lines between the accurate bar-close MA values
+        if (!Double.isNaN(lastMa1Value)) {
+            double interpolatedMa1 = interpolate(prevMa1Value, lastMa1Value, ratio);
+            ma1Indicator.addPoint(interpolatedMa1);
+        }
+        
+        if (!Double.isNaN(lastMa2Value)) {
+            double interpolatedMa2 = interpolate(prevMa2Value, lastMa2Value, ratio);
+            ma2Indicator.addPoint(interpolatedMa2);
+        }
+        
+        if (!Double.isNaN(lastMa3Value)) {
+            double interpolatedMa3 = interpolate(prevMa3Value, lastMa3Value, ratio);
+            ma3Indicator.addPoint(interpolatedMa3);
+        }
+        
+        // Log occasionally to verify smooth interpolation is working
+        if (tradeCount <= 5 || tradeCount % 100 == 0) {
+            Log.info("QI MA: trade#" + tradeCount + ", ratio=" + String.format("%.3f", ratio) + 
+                    ", MA1=" + String.format("%.2f", interpolate(prevMa1Value, lastMa1Value, ratio)));
+        }
+    }
+    
+    /**
+     * Linear interpolation between two values
+     */
+    private double interpolate(double prev, double current, double ratio) {
+        if (Double.isNaN(prev)) {
+            return current; // No previous value, use current
+        }
+        if (Double.isNaN(current)) {
+            return prev; // No current value, use previous
+        }
+        return prev + (current - prev) * ratio;
     }
     
     @Override
