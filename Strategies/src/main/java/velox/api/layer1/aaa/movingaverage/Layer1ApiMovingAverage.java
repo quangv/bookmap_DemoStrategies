@@ -1,4 +1,4 @@
-package velox.api.layer1.simpledemo.movingaverage;
+package velox.api.layer1.aaa.movingaverage;
 
 import java.awt.Color;
 import java.util.LinkedList;
@@ -21,7 +21,7 @@ import velox.api.layer1.simplified.Indicator;
 import velox.api.layer1.simplified.InitialState;
 import velox.api.layer1.simplified.Intervals;
 import velox.api.layer1.simplified.Parameter;
-import velox.api.layer1.simpledemo.movingaverage.MovingAverageSettings.MAType;
+import velox.api.layer1.aaa.movingaverage.MovingAverageSettings.MAType;
 
 /**
  * Moving Average Indicator for Bookmap using Simplified API

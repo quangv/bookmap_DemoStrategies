@@ -1,4 +1,4 @@
-package velox.api.layer1.simpledemo.movingaverage;
+package velox.api.layer1.aaa.movingaverage;
 
 import java.awt.Color;
 
