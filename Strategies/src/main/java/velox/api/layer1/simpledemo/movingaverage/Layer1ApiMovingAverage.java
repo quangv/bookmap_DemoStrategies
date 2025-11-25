@@ -32,27 +32,52 @@ import velox.api.layer1.simpledemo.movingaverage.MovingAverageSettings.MAType;
 @Layer1ApiVersion(Layer1ApiVersionValue.VERSION2)
 public class Layer1ApiMovingAverage implements CustomModule, BarDataListener, HistoricalDataListener {
     
-    @Parameter(name = "Period", step = 1.0)
-    public Double period = 20.0;
+    @Parameter(name = "Period 1", step = 1.0)
+    public Double period1 = 9.0;
+    
+    @Parameter(name = "Color 1")
+    public Color color1 = new Color(255, 87, 51); // Orange-red
+    
+    @Parameter(name = "Period 2", step = 1.0)
+    public Double period2 = 20.0;
+    
+    @Parameter(name = "Color 2")
+    public Color color2 = new Color(33, 150, 243); // Blue
+    
+    @Parameter(name = "Period 3", step = 1.0)
+    public Double period3 = 50.0;
+    
+    @Parameter(name = "Color 3")
+    public Color color3 = new Color(76, 175, 80); // Green
     
     @Parameter(name = "MA Type")
     public String maType = "EMA";
     
-    @Parameter(name = "Line Color")
-    public Color color = new Color(33, 150, 243);
-    
     @Parameter(name = "Interval (seconds)", step = 1.0)
     public Double intervalSeconds = 5.0;
     
-    private Indicator maIndicator;
-    private MovingAverageCalculator calculator;
+    private Indicator ma1Indicator;
+    private Indicator ma2Indicator;
+    private Indicator ma3Indicator;
+    private MovingAverageCalculator calculator1;
+    private MovingAverageCalculator calculator2;
+    private MovingAverageCalculator calculator3;
     
     @Override
     public void initialize(String alias, InstrumentInfo info, Api api, InitialState initialState) {
-        Log.info("QI MA: Initializing for " + alias + ", period=" + period + ", type=" + maType);
-        maIndicator = api.registerIndicator("MA", GraphType.PRIMARY);
-        maIndicator.setColor(color);
-        Log.info("QI MA: Indicator registered, color=" + color);
+        Log.info("QI MA: Initializing for " + alias + ", periods=[" + period1 + "," + period2 + "," + period3 + "], type=" + maType);
+        
+        ma1Indicator = api.registerIndicator("MA" + period1.intValue(), GraphType.PRIMARY);
+        ma1Indicator.setColor(color1);
+        
+        ma2Indicator = api.registerIndicator("MA" + period2.intValue(), GraphType.PRIMARY);
+        ma2Indicator.setColor(color2);
+        
+        ma3Indicator = api.registerIndicator("MA" + period3.intValue(), GraphType.PRIMARY);
+        ma3Indicator.setColor(color3);
+        
+        Log.info("QI MA: Indicators registered");
+        
         MAType type;
         try {
             type = MAType.valueOf(maType);
@@ -60,7 +85,10 @@ public class Layer1ApiMovingAverage implements CustomModule, BarDataListener, Hi
             Log.warn("QI MA: Invalid MA type '" + maType + "', defaulting to EMA");
             type = MAType.EMA;
         }
-        calculator = new MovingAverageCalculator(period.intValue(), type);
+        
+        calculator1 = new MovingAverageCalculator(period1.intValue(), type);
+        calculator2 = new MovingAverageCalculator(period2.intValue(), type);
+        calculator3 = new MovingAverageCalculator(period3.intValue(), type);
     }
     
     @Override
@@ -70,23 +98,34 @@ public class Layer1ApiMovingAverage implements CustomModule, BarDataListener, Hi
     
     @Override
     public void onBar(OrderBook orderBook, Bar bar) {
-        if (calculator == null) {
-            Log.warn("QI MA: Calculator is null!");
+        if (calculator1 == null || calculator2 == null || calculator3 == null) {
+            Log.warn("QI MA: Calculators are null!");
             return;
         }
         
         // Use close price from bar
         double price = bar.getClose();
-        double maValue = calculator.addPrice(price);
+        
+        double ma1Value = calculator1.addPrice(price);
+        double ma2Value = calculator2.addPrice(price);
+        double ma3Value = calculator3.addPrice(price);
         
         // Log first 5 bars, then every 20th
-        if (calculator.getCount() <= 5 || calculator.getCount() % 20 == 0) {
-            Log.info("QI MA: bar#" + calculator.getCount() + ", close=" + String.format("%.2f", price) + 
-                    ", MA=" + (Double.isNaN(maValue) ? "warming up" : String.format("%.2f", maValue)));
+        if (calculator1.getCount() <= 5 || calculator1.getCount() % 20 == 0) {
+            Log.info("QI MA: bar#" + calculator1.getCount() + ", close=" + String.format("%.2f", price) + 
+                    ", MA1=" + (Double.isNaN(ma1Value) ? "warming" : String.format("%.2f", ma1Value)) +
+                    ", MA2=" + (Double.isNaN(ma2Value) ? "warming" : String.format("%.2f", ma2Value)) +
+                    ", MA3=" + (Double.isNaN(ma3Value) ? "warming" : String.format("%.2f", ma3Value)));
         }
         
-        if (!Double.isNaN(maValue)) {
-            maIndicator.addPoint(maValue);
+        if (!Double.isNaN(ma1Value)) {
+            ma1Indicator.addPoint(ma1Value);
+        }
+        if (!Double.isNaN(ma2Value)) {
+            ma2Indicator.addPoint(ma2Value);
+        }
+        if (!Double.isNaN(ma3Value)) {
+            ma3Indicator.addPoint(ma3Value);
         }
     }
     
