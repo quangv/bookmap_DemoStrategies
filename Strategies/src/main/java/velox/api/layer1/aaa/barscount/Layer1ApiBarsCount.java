@@ -58,6 +58,7 @@ public class Layer1ApiBarsCount implements CustomModule, BarDataListener, Histor
     private Indicator countIndicator;
     private BarsCountCalculator calculator;
     private InstrumentInfo info;
+    private Color currentIndicatorColor;
     
     @Override
     public void initialize(String alias, InstrumentInfo info, Api api, InitialState initialState) {
@@ -66,6 +67,7 @@ public class Layer1ApiBarsCount implements CustomModule, BarDataListener, Histor
         
         countIndicator = api.registerIndicator("BarsCount", GraphType.PRIMARY);
         countIndicator.setColor(upColor);
+        currentIndicatorColor = upColor;
         
         Log.info("QI Bars Count: Indicator registered");
         
@@ -100,9 +102,12 @@ public class Layer1ApiBarsCount implements CustomModule, BarDataListener, Histor
         // Use the price level to display at (high for visibility)
         double displayPrice = bar.getHigh();
         
-        // Update color based on direction and new high/low status
+        // Only update color if it changed (performance optimization)
         Color currentColor = result.getColor();
-        countIndicator.setColor(currentColor);
+        if (!currentColor.equals(currentIndicatorColor)) {
+            countIndicator.setColor(currentColor);
+            currentIndicatorColor = currentColor;
+        }
         
         // Add point at the high of the bar with the count as the value
         // The actual visual display would be better with plotchar equivalent
@@ -172,7 +177,7 @@ public class Layer1ApiBarsCount implements CustomModule, BarDataListener, Histor
         private int totalBars = 0;
         private boolean isDown = false;
         private double sumClose = 0.0;
-        private int sumCount = 0;
+        private final java.util.LinkedList<Double> priceQueue = new java.util.LinkedList<>();
         private double lastSMA = Double.NaN;
         
         public BarsCountCalculator(int lookbackPeriod, int maxCount, String compareWith,
@@ -193,19 +198,20 @@ public class Layer1ApiBarsCount implements CustomModule, BarDataListener, Histor
         public CountResult addBar(double close) {
             totalBars++;
             
-            // Calculate simple moving average for direction
+            // Calculate simple moving average for direction using a proper queue
+            priceQueue.add(close);
             sumClose += close;
-            sumCount++;
             
-            if (sumCount > lookbackPeriod) {
-                sumClose -= sumClose / sumCount; // Approximate removal of oldest
-                sumCount--;
+            // Remove oldest price if we exceed lookback period
+            if (priceQueue.size() > lookbackPeriod) {
+                double oldestPrice = priceQueue.removeFirst();
+                sumClose -= oldestPrice;
             }
             
-            double currentSMA = sumClose / sumCount;
+            double currentSMA = sumClose / priceQueue.size();
             
-            // Determine if we're in a down trend
-            boolean newIsDown = close < lastSMA;
+            // Determine if we're in a down trend (compare close to previous SMA)
+            boolean newIsDown = !Double.isNaN(lastSMA) && close < lastSMA;
             lastSMA = currentSMA;
             
             // Check if direction changed
