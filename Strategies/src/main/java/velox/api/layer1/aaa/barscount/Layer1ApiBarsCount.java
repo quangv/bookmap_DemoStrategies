@@ -61,27 +61,43 @@ public class Layer1ApiBarsCount implements CustomModule, BarDataListener, Histor
     @Parameter(name = "Interval (seconds)", step = 1.0)
     public Double intervalSeconds = 5.0;
     
-    private Indicator countIndicator;
+    @Parameter(name = "Use 4 Lines (separate new high/low)")
+    public Boolean use4Lines = false;
+    
+    private Indicator upIndicator;
+    private Indicator downIndicator;
+    private Indicator newHighIndicator;
+    private Indicator newLowIndicator;
     private Indicator zeroLineIndicator;
     private BarsCountCalculator calculator;
     private InstrumentInfo info;
-    private Color currentIndicatorColor;
     
     @Override
     public void initialize(String alias, InstrumentInfo info, Api api, InitialState initialState) {
         this.info = info;
-        Log.info("QI Bars Count: Initializing for " + alias + ", lookback=" + lookbackPeriod.intValue());
+        Log.info("QI Bars Count: Initializing for " + alias + ", lookback=" + lookbackPeriod.intValue() + ", use4Lines=" + use4Lines);
         
-        countIndicator = api.registerIndicator("BarsCount", GraphType.BOTTOM);
-        countIndicator.setColor(upColor);
-        currentIndicatorColor = upColor;
+        // Register separate indicators for each state
+        upIndicator = api.registerIndicator("Up Count", GraphType.BOTTOM);
+        upIndicator.setColor(upColor);
+        
+        downIndicator = api.registerIndicator("Down Count", GraphType.BOTTOM);
+        downIndicator.setColor(downColor);
+        
+        if (use4Lines) {
+            newHighIndicator = api.registerIndicator("New High", GraphType.BOTTOM);
+            newHighIndicator.setColor(newHighColor);
+            
+            newLowIndicator = api.registerIndicator("New Low", GraphType.BOTTOM);
+            newLowIndicator.setColor(newLowColor);
+        }
         
         // Add a zero line as a reference
         zeroLineIndicator = api.registerIndicator("Zero Line", GraphType.BOTTOM);
         zeroLineIndicator.setColor(zeroLineColor);
         zeroLineIndicator.setWidth(zeroLineWidth.intValue());
         
-        Log.info("QI Bars Count: Indicator registered as bottom panel");
+        Log.info("QI Bars Count: Indicators registered as bottom panel");
         
         calculator = new BarsCountCalculator(
             lookbackPeriod.intValue(), 
@@ -110,17 +126,45 @@ public class Layer1ApiBarsCount implements CustomModule, BarDataListener, Histor
         
         CountResult result = calculator.addBar(close);
         
-        // Only update color if it changed (performance optimization)
-        Color currentColor = result.getColor();
-        if (!currentColor.equals(currentIndicatorColor)) {
-            countIndicator.setColor(currentColor);
-            currentIndicatorColor = currentColor;
-        }
+        // Display the count as a positive value in the bottom panel
+        // Both up and down counts are positive, just different colors
+        double countValue = result.count;
         
-        // Display the count as a value in the bottom panel
-        // Negative values for down trends, positive for up trends
-        double countValue = result.isDown ? -result.count : result.count;
-        countIndicator.addPoint(countValue);
+        // Always add 0 to all indicators to keep them on the same scale
+        // Use NaN to make lines invisible when not active, but the scale remains consistent
+        if (use4Lines) {
+            // 4-line mode: separate indicators for each state
+            if (result.isDown) {
+                if (result.isNewLow) {
+                    newLowIndicator.addPoint(countValue);
+                    downIndicator.addPoint(0.0);
+                } else {
+                    newLowIndicator.addPoint(0.0);
+                    downIndicator.addPoint(countValue);
+                }
+                upIndicator.addPoint(0.0);
+                newHighIndicator.addPoint(0.0);
+            } else {
+                if (result.isNewHigh) {
+                    newHighIndicator.addPoint(countValue);
+                    upIndicator.addPoint(0.0);
+                } else {
+                    newHighIndicator.addPoint(0.0);
+                    upIndicator.addPoint(countValue);
+                }
+                downIndicator.addPoint(0.0);
+                newLowIndicator.addPoint(0.0);
+            }
+        } else {
+            // 2-line mode: just up and down
+            if (result.isDown) {
+                downIndicator.addPoint(countValue);
+                upIndicator.addPoint(0.0);
+            } else {
+                upIndicator.addPoint(countValue);
+                downIndicator.addPoint(0.0);
+            }
+        }
         
         // Add zero line reference point
         zeroLineIndicator.addPoint(0.0);
