@@ -65,11 +65,11 @@ public class Layer1ApiBarsCount implements CustomModule, BarDataListener, Histor
         this.info = info;
         Log.info("QI Bars Count: Initializing for " + alias + ", lookback=" + lookbackPeriod.intValue());
         
-        countIndicator = api.registerIndicator("BarsCount", GraphType.PRIMARY);
+        countIndicator = api.registerIndicator("BarsCount", GraphType.BOTTOM);
         countIndicator.setColor(upColor);
         currentIndicatorColor = upColor;
         
-        Log.info("QI Bars Count: Indicator registered");
+        Log.info("QI Bars Count: Indicator registered as bottom panel");
         
         calculator = new BarsCountCalculator(
             lookbackPeriod.intValue(), 
@@ -98,10 +98,6 @@ public class Layer1ApiBarsCount implements CustomModule, BarDataListener, Histor
         
         CountResult result = calculator.addBar(close);
         
-        // Update indicator with the count value
-        // Use the price level to display at (high for visibility)
-        double displayPrice = bar.getHigh();
-        
         // Only update color if it changed (performance optimization)
         Color currentColor = result.getColor();
         if (!currentColor.equals(currentIndicatorColor)) {
@@ -109,10 +105,10 @@ public class Layer1ApiBarsCount implements CustomModule, BarDataListener, Histor
             currentIndicatorColor = currentColor;
         }
         
-        // Add point at the high of the bar with the count as the value
-        // The actual visual display would be better with plotchar equivalent
-        // but we use the indicator line to show count magnitude
-        countIndicator.addPoint(displayPrice + (result.count * info.pips));
+        // Display the count as a value in the bottom panel
+        // Negative values for down trends, positive for up trends
+        double countValue = result.isDown ? -result.count : result.count;
+        countIndicator.addPoint(countValue);
         
         // Log periodically
         if (calculator.getTotalBars() <= 5 || calculator.getTotalBars() % 20 == 0) {
