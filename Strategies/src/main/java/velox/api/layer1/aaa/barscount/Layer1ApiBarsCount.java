@@ -52,10 +52,17 @@ public class Layer1ApiBarsCount implements CustomModule, BarDataListener, Histor
     @Parameter(name = "Compare With (self/other/both/either)")
     public String compareWith = "self";
     
+    @Parameter(name = "Zero Line Color")
+    public Color zeroLineColor = new Color(200, 200, 200); // Light gray
+    
+    @Parameter(name = "Zero Line Width", step = 1.0)
+    public Double zeroLineWidth = 2.0;
+    
     @Parameter(name = "Interval (seconds)", step = 1.0)
     public Double intervalSeconds = 5.0;
     
     private Indicator countIndicator;
+    private Indicator zeroLineIndicator;
     private BarsCountCalculator calculator;
     private InstrumentInfo info;
     private Color currentIndicatorColor;
@@ -68,6 +75,11 @@ public class Layer1ApiBarsCount implements CustomModule, BarDataListener, Histor
         countIndicator = api.registerIndicator("BarsCount", GraphType.BOTTOM);
         countIndicator.setColor(upColor);
         currentIndicatorColor = upColor;
+        
+        // Add a zero line as a reference
+        zeroLineIndicator = api.registerIndicator("Zero Line", GraphType.BOTTOM);
+        zeroLineIndicator.setColor(zeroLineColor);
+        zeroLineIndicator.setWidth(zeroLineWidth.intValue());
         
         Log.info("QI Bars Count: Indicator registered as bottom panel");
         
@@ -109,6 +121,9 @@ public class Layer1ApiBarsCount implements CustomModule, BarDataListener, Histor
         // Negative values for down trends, positive for up trends
         double countValue = result.isDown ? -result.count : result.count;
         countIndicator.addPoint(countValue);
+        
+        // Add zero line reference point
+        zeroLineIndicator.addPoint(0.0);
         
         // Log periodically
         if (calculator.getTotalBars() <= 5 || calculator.getTotalBars() % 20 == 0) {
