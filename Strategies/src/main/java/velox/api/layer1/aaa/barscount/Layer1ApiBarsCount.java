@@ -11,6 +11,7 @@ import velox.api.layer1.data.InstrumentInfo;
 import velox.api.layer1.layers.utils.OrderBook;
 import velox.api.layer1.messages.indicators.Layer1ApiUserMessageModifyIndicator.GraphType;
 import velox.api.layer1.simplified.Api;
+import velox.api.layer1.simplified.AxisGroup;
 import velox.api.layer1.simplified.Bar;
 import velox.api.layer1.simplified.BarDataListener;
 import velox.api.layer1.simplified.CustomModule;
@@ -96,6 +97,15 @@ public class Layer1ApiBarsCount implements CustomModule, BarDataListener, Histor
         zeroLineIndicator = api.registerIndicator("Zero Line", GraphType.BOTTOM);
         zeroLineIndicator.setColor(zeroLineColor);
         zeroLineIndicator.setWidth(zeroLineWidth.intValue());
+
+        AxisGroup axisGroup = new AxisGroup();
+        axisGroup.add(upIndicator);
+        axisGroup.add(downIndicator);
+        if (use4Lines) {
+            axisGroup.add(newHighIndicator);
+            axisGroup.add(newLowIndicator);
+        }
+        axisGroup.add(zeroLineIndicator);
         
         Log.info("QI Bars Count: Indicators registered as bottom panel");
         
