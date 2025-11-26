@@ -10,7 +10,6 @@ import velox.api.layer1.annotations.Layer1SimpleAttachable;
 import velox.api.layer1.annotations.Layer1StrategyName;
 import velox.api.layer1.common.Log;
 import velox.api.layer1.data.InstrumentInfo;
-import velox.api.layer1.data.TradeInfo;
 import velox.api.layer1.layers.utils.OrderBook;
 import velox.api.layer1.messages.indicators.Layer1ApiUserMessageModifyIndicator.GraphType;
 import velox.api.layer1.simplified.Api;
@@ -20,9 +19,10 @@ import velox.api.layer1.simplified.CustomModule;
 import velox.api.layer1.simplified.HistoricalDataListener;
 import velox.api.layer1.simplified.Indicator;
 import velox.api.layer1.simplified.InitialState;
+import velox.api.layer1.simplified.IntervalListener;
 import velox.api.layer1.simplified.Intervals;
 import velox.api.layer1.simplified.Parameter;
-import velox.api.layer1.simplified.TradeDataListener;
+import velox.api.layer1.simplified.TimeListener;
 import velox.api.layer1.aaa.movingaverage.MovingAverageSettings.MAType;
 
 /**
@@ -32,7 +32,7 @@ import velox.api.layer1.aaa.movingaverage.MovingAverageSettings.MAType;
 @Layer1SimpleAttachable
 @Layer1StrategyName("QI Moving Average")
 @Layer1ApiVersion(Layer1ApiVersionValue.VERSION2)
-public class Layer1ApiMovingAverage implements CustomModule, BarDataListener, HistoricalDataListener, TradeDataListener {
+public class Layer1ApiMovingAverage implements CustomModule, BarDataListener, HistoricalDataListener, TimeListener, IntervalListener {
     
     @Parameter(name = "Period 1", step = 1.0)
     public Double period1 = 9.0;
@@ -75,8 +75,9 @@ public class Layer1ApiMovingAverage implements CustomModule, BarDataListener, Hi
     private double prevMa1Value = Double.NaN;
     private double prevMa2Value = Double.NaN;
     private double prevMa3Value = Double.NaN;
-    private long barStartTime = 0;
-    private long barEndTime = 0;
+    private long lastBarTime = 0;
+    private long currentTime = 0;
+    private long barIntervalNanos = 0;
     
     @Override
     public void initialize(String alias, InstrumentInfo info, Api api, InitialState initialState) {
@@ -118,9 +119,9 @@ public class Layer1ApiMovingAverage implements CustomModule, BarDataListener, Hi
             return;
         }
         
-        // Track timing for interpolation
-        barStartTime = barEndTime;
-        barEndTime = System.nanoTime();
+        // Update timing for interpolation
+        lastBarTime = currentTime;
+        barIntervalNanos = (long)(intervalSeconds * 1_000_000_000L);
         
         // Use close price from bar
         double price = bar.getClose();
@@ -162,56 +163,39 @@ public class Layer1ApiMovingAverage implements CustomModule, BarDataListener, Hi
         }
     }
     
-    private int tradeCount = 0;
-    
     @Override
-    public void onTrade(double price, int size, TradeInfo tradeInfo) {
-        if (!smoothLines) {
-            return; // Only interpolate if smooth lines is enabled
+    public void onTimestamp(long t) {
+        currentTime = t;
+        
+        if (!smoothLines || Double.isNaN(lastMa1Value)) {
+            return; // Only interpolate if smooth lines enabled and we have data
         }
         
-        // Skip if we don't have MA values yet
-        if (Double.isNaN(lastMa1Value) && Double.isNaN(lastMa2Value) && Double.isNaN(lastMa3Value)) {
-            return;
-        }
-        
-        tradeCount++;
-        
-        // Calculate interpolation ratio based on time within bar
-        long currentTime = System.nanoTime();
-        double ratio = 0.5; // Default to middle if timing not available
-        
-        if (barStartTime > 0 && barEndTime > barStartTime) {
-            long barDuration = barEndTime - barStartTime;
-            long elapsedInBar = currentTime - barEndTime;
-            
-            if (barDuration > 0 && elapsedInBar >= 0) {
-                ratio = Math.min(1.0, (double) elapsedInBar / barDuration);
-            }
+        // Calculate interpolation ratio based on time elapsed in current bar
+        double ratio = 0.0;
+        if (lastBarTime > 0 && barIntervalNanos > 0) {
+            long elapsedInBar = currentTime - lastBarTime;
+            ratio = Math.max(0.0, Math.min(1.0, (double) elapsedInBar / barIntervalNanos));
         }
         
         // Linear interpolation between previous and current MA values
-        // This creates smooth lines between the accurate bar-close MA values
         if (!Double.isNaN(lastMa1Value)) {
-            double interpolatedMa1 = interpolate(prevMa1Value, lastMa1Value, ratio);
-            ma1Indicator.addPoint(interpolatedMa1);
+            double interpolated = interpolate(prevMa1Value, lastMa1Value, ratio);
+            ma1Indicator.addPoint(interpolated);
         }
-        
         if (!Double.isNaN(lastMa2Value)) {
-            double interpolatedMa2 = interpolate(prevMa2Value, lastMa2Value, ratio);
-            ma2Indicator.addPoint(interpolatedMa2);
+            double interpolated = interpolate(prevMa2Value, lastMa2Value, ratio);
+            ma2Indicator.addPoint(interpolated);
         }
-        
         if (!Double.isNaN(lastMa3Value)) {
-            double interpolatedMa3 = interpolate(prevMa3Value, lastMa3Value, ratio);
-            ma3Indicator.addPoint(interpolatedMa3);
+            double interpolated = interpolate(prevMa3Value, lastMa3Value, ratio);
+            ma3Indicator.addPoint(interpolated);
         }
-        
-        // Log occasionally to verify smooth interpolation is working
-        if (tradeCount <= 5 || tradeCount % 100 == 0) {
-            Log.info("QI MA: trade#" + tradeCount + ", ratio=" + String.format("%.3f", ratio) + 
-                    ", MA1=" + String.format("%.2f", interpolate(prevMa1Value, lastMa1Value, ratio)));
-        }
+    }
+    
+    @Override
+    public void onInterval() {
+        // Required by IntervalListener interface
     }
     
     /**
