@@ -34,6 +34,9 @@ public class Layer1ApiVWAP implements CustomModule, BarDataListener, HistoricalD
     @Parameter(name = "Color")
     public Color color = new Color(250, 128, 114); // Salmon color
     
+    @Parameter(name = "Line Width", step = 1.0)
+    public Double lineWidth = 3.0;
+    
     @Parameter(name = "Interval (seconds)", step = 1.0)
     public Double intervalSeconds = 5.0;
     
@@ -52,12 +55,13 @@ public class Layer1ApiVWAP implements CustomModule, BarDataListener, HistoricalD
     
     @Override
     public void initialize(String alias, InstrumentInfo info, Api api, InitialState initialState) {
-        Log.info("QI VWAP: Initializing for " + alias + ", color=salmon, smoothLines=" + smoothLines);
+        Log.info("QI VWAP: Initializing for " + alias + ", color=salmon, lineWidth=" + lineWidth + ", smoothLines=" + smoothLines);
         
         vwapIndicator = api.registerIndicator("VWAP", GraphType.PRIMARY);
         vwapIndicator.setColor(color);
+        vwapIndicator.setWidth(lineWidth.intValue());
         
-        Log.info("QI VWAP: Indicator registered");
+        Log.info("QI VWAP: Indicator registered with line width " + lineWidth);
         
         calculator = new VWAPCalculator();
     }
