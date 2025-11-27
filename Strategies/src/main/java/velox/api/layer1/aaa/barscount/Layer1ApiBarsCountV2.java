@@ -8,6 +8,7 @@ import java.awt.image.BufferedImage;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -15,6 +16,7 @@ import velox.api.layer1.Layer1ApiAdminAdapter;
 import velox.api.layer1.Layer1ApiFinishable;
 import velox.api.layer1.Layer1ApiInstrumentListener;
 import velox.api.layer1.Layer1ApiProvider;
+import velox.api.layer1.Layer1CustomPanelsGetter;
 import velox.api.layer1.annotations.Layer1ApiVersion;
 import velox.api.layer1.annotations.Layer1ApiVersionValue;
 import velox.api.layer1.annotations.Layer1Attachable;
@@ -48,6 +50,18 @@ import velox.api.layer1.messages.indicators.Layer1ApiDataInterfaceRequestMessage
 import velox.api.layer1.messages.indicators.Layer1ApiUserMessageModifyIndicator;
 import velox.api.layer1.messages.indicators.Layer1ApiUserMessageModifyIndicator.GraphType;
 import velox.api.layer1.messages.indicators.StrategyUpdateGenerator;
+import velox.api.layer1.messages.indicators.SettingsAccess;
+import velox.api.layer1.settings.Layer1ConfigSettingsInterface;
+import velox.api.layer1.settings.StrategySettingsVersion;
+import velox.gui.StrategyPanel;
+
+import javax.swing.JLabel;
+import javax.swing.JSpinner;
+import javax.swing.SpinnerNumberModel;
+import javax.swing.event.ChangeListener;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
 
 /**
  * Bars Count Indicator V2 for Bookmap using Advanced API
@@ -61,7 +75,9 @@ public class Layer1ApiBarsCountV2 implements
     Layer1ApiFinishable,
     Layer1ApiAdminAdapter,
     Layer1ApiInstrumentListener,
-    OnlineCalculatable {
+    OnlineCalculatable,
+    Layer1CustomPanelsGetter,
+    Layer1ConfigSettingsInterface {
 
     /**
      * Custom event that holds bar count information and can draw itself as a marker
@@ -252,6 +268,12 @@ public class Layer1ApiBarsCountV2 implements
 
     private static final String INDICATOR_NAME = "Bars Count V2";
     private static final String TREE_NAME = "Bars Count Tree";
+    private static final double MIN_INTERVAL_SECONDS = 0.25;
+    private static final double MAX_INTERVAL_SECONDS = 600.0;
+    private static final double INTERVAL_STEP_SECONDS = 0.25;
+    private static final long NANOS_IN_SECOND = 1_000_000_000L;
+    private static final long MIN_INTERVAL_NANOS = 1_000_000L;
+    private static final String SETTINGS_PANEL_TITLE = "Bars Count Settings";
     
     // Parameters - would be configurable in a real implementation
     private int lookbackPeriod = 3;
@@ -269,9 +291,10 @@ public class Layer1ApiBarsCountV2 implements
     private Map<String, BarAccumulator> barAccumulators = new HashMap<>();
     private Map<String, Long> lastEventTimeByAlias = new HashMap<>();
     private Map<String, InvalidateInterface> invalidateInterfaceMap = new HashMap<>();
+    private Map<String, BarsCountSettings> settingsMap = new ConcurrentHashMap<>();
+    private SettingsAccess settingsAccess;
     private String indicatorUserName;
-    private double intervalSeconds = 5.0;
-    private long intervalNanos = (long) (intervalSeconds * 1_000_000_000L);
+    private double defaultIntervalSeconds = 5.0;
     
     public Layer1ApiBarsCountV2(Layer1ApiProvider provider) {
         this.provider = provider;
@@ -291,9 +314,7 @@ public class Layer1ApiBarsCountV2 implements
     
     @Override
     public void onInstrumentRemoved(String alias) {
-        calculators.remove(alias);
-        barAccumulators.remove(alias);
-        lastEventTimeByAlias.remove(alias);
+        clearInstrumentState(alias);
     }
     
     @Override
@@ -301,6 +322,81 @@ public class Layer1ApiBarsCountV2 implements
     
     @Override
     public void onInstrumentAlreadySubscribed(String symbol, String exchange, String type) {}
+
+    private void resetInstrumentState(String alias) {
+        if (alias == null) {
+            return;
+        }
+        calculators.remove(alias);
+        barAccumulators.remove(alias);
+        lastEventTimeByAlias.remove(alias);
+    }
+
+    private void clearInstrumentState(String alias) {
+        resetInstrumentState(alias);
+        if (alias != null) {
+            settingsMap.remove(alias);
+        }
+    }
+
+    private void requestInvalidate(String alias) {
+        if (alias == null) {
+            return;
+        }
+        InvalidateInterface invalidateInterface = invalidateInterfaceMap.get(alias);
+        if (invalidateInterface != null) {
+            invalidateInterface.invalidate();
+        }
+    }
+
+    private long getIntervalNanos(String alias) {
+        double intervalSeconds = getSettingsFor(alias).getIntervalSecondsOrDefault(defaultIntervalSeconds);
+        long interval = (long) (intervalSeconds * NANOS_IN_SECOND);
+        return Math.max(interval, MIN_INTERVAL_NANOS);
+    }
+
+    private BarsCountSettings getSettingsFor(String alias) {
+        if (alias == null) {
+            return createDefaultSettings();
+        }
+        return settingsMap.compute(alias, (key, existing) -> {
+            BarsCountSettings settings = existing;
+            if (settings == null) {
+                settings = loadSettings(key);
+            }
+            if (settings.getIntervalSeconds() <= 0) {
+                settings.setIntervalSeconds(defaultIntervalSeconds);
+            }
+            return settings;
+        });
+    }
+
+    private BarsCountSettings loadSettings(String alias) {
+        BarsCountSettings settings = null;
+        if (settingsAccess != null) {
+            settings = (BarsCountSettings) settingsAccess.getSettings(alias, INDICATOR_NAME, BarsCountSettings.class);
+        }
+        if (settings == null) {
+            settings = createDefaultSettings();
+        }
+        return settings;
+    }
+
+    private BarsCountSettings createDefaultSettings() {
+        BarsCountSettings settings = new BarsCountSettings();
+        settings.setIntervalSeconds(defaultIntervalSeconds);
+        return settings;
+    }
+
+    private void settingsChanged(String alias, BarsCountSettings settings) {
+        if (alias == null || settings == null) {
+            return;
+        }
+        settingsMap.put(alias, settings);
+        if (settingsAccess != null) {
+            settingsAccess.setSettings(alias, INDICATOR_NAME, settings, BarsCountSettings.class);
+        }
+    }
 
     @Override
     public void onUserMessage(Object data) {
@@ -356,8 +452,8 @@ public class Layer1ApiBarsCountV2 implements
                 public void onTrade(String alias, double price, int size, TradeInfo tradeInfo) {
                     Log.info("QI Bars Count V2: onTrade called - alias=" + alias + ", price=" + price + ", size=" + size);
 
-                    BarAccumulator accumulator = barAccumulators.computeIfAbsent(alias,
-                            key -> new BarAccumulator(intervalNanos));
+                        BarAccumulator accumulator = barAccumulators.computeIfAbsent(alias,
+                            key -> new BarAccumulator(getIntervalNanos(key)));
                     CompletedBar completedBar = accumulator.onTrade(time, price);
                     if (completedBar == null) {
                         return;
@@ -410,9 +506,7 @@ public class Layer1ApiBarsCountV2 implements
                 
                 @Override
                 public void onInstrumentRemoved(String alias) {
-                    calculators.remove(alias);
-                    barAccumulators.remove(alias);
-                    lastEventTimeByAlias.remove(alias);
+                    clearInstrumentState(alias);
                 }
                 
                 @Override
@@ -476,6 +570,60 @@ public class Layer1ApiBarsCountV2 implements
     }
 
     @Override
+    public void acceptSettingsInterface(SettingsAccess settingsAccess) {
+        this.settingsAccess = settingsAccess;
+        if (settingsAccess != null) {
+            settingsMap.replaceAll((alias, existing) -> loadSettings(alias));
+        }
+    }
+
+    @Override
+    public StrategyPanel[] getCustomGuiFor(String alias, String indicatorName) {
+        if (alias == null) {
+            return new StrategyPanel[0];
+        }
+
+        StrategyPanel panel = new StrategyPanel(SETTINGS_PANEL_TITLE, new GridBagLayout());
+        panel.setLayout(new GridBagLayout());
+
+        GridBagConstraints labelConstraints = new GridBagConstraints();
+        labelConstraints.gridx = 0;
+        labelConstraints.gridy = 0;
+        labelConstraints.insets = new Insets(5, 5, 5, 5);
+        labelConstraints.anchor = GridBagConstraints.WEST;
+        panel.add(new JLabel("Interval (sec)"), labelConstraints);
+
+        double currentInterval = getSettingsFor(alias).getIntervalSecondsOrDefault(defaultIntervalSeconds);
+        SpinnerNumberModel model = new SpinnerNumberModel(currentInterval, MIN_INTERVAL_SECONDS, MAX_INTERVAL_SECONDS, INTERVAL_STEP_SECONDS);
+        JSpinner intervalSpinner = new JSpinner(model);
+
+        GridBagConstraints spinnerConstraints = new GridBagConstraints();
+        spinnerConstraints.gridx = 1;
+        spinnerConstraints.gridy = 0;
+        spinnerConstraints.weightx = 1;
+        spinnerConstraints.insets = new Insets(5, 5, 5, 5);
+        spinnerConstraints.fill = GridBagConstraints.HORIZONTAL;
+        panel.add(intervalSpinner, spinnerConstraints);
+
+        ChangeListener intervalListener = event -> {
+            Number value = (Number) intervalSpinner.getValue();
+            double newInterval = value.doubleValue();
+            BarsCountSettings settings = getSettingsFor(alias);
+            double previous = settings.getIntervalSecondsOrDefault(defaultIntervalSeconds);
+            if (Double.compare(previous, newInterval) == 0) {
+                return;
+            }
+            settings.setIntervalSeconds(newInterval);
+            settingsChanged(alias, settings);
+            resetInstrumentState(alias);
+            requestInvalidate(alias);
+        };
+        intervalSpinner.addChangeListener(intervalListener);
+
+        return new StrategyPanel[] {panel};
+    }
+
+    @Override
     public void calculateValuesInRange(String indicatorName, String alias, long t0, long intervalWidth,
             int intervalsNumber, CalculatedResultListener listener) {
         if (dataStructureInterface == null) {
@@ -536,6 +684,23 @@ public class Layer1ApiBarsCountV2 implements
                 }
             }
         };
+    }
+
+    @StrategySettingsVersion(currentVersion = 1, compatibleVersions = {})
+    public static class BarsCountSettings {
+        private double intervalSeconds;
+
+        public double getIntervalSeconds() {
+            return intervalSeconds;
+        }
+
+        public double getIntervalSecondsOrDefault(double defaultValue) {
+            return intervalSeconds > 0 ? intervalSeconds : defaultValue;
+        }
+
+        public void setIntervalSeconds(double intervalSeconds) {
+            this.intervalSeconds = intervalSeconds;
+        }
     }
 
     /**
