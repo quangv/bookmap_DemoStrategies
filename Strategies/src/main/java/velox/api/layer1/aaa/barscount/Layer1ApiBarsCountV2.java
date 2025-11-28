@@ -450,10 +450,13 @@ public class Layer1ApiBarsCountV2 implements
                 
                 @Override
                 public void onTrade(String alias, double price, int size, TradeInfo tradeInfo) {
-                    Log.info("QI Bars Count V2: onTrade called - alias=" + alias + ", price=" + price + ", size=" + size);
-
-                        BarAccumulator accumulator = barAccumulators.computeIfAbsent(alias,
-                            key -> new BarAccumulator(getIntervalNanos(key)));
+                    BarAccumulator accumulator = barAccumulators.computeIfAbsent(alias, key -> {
+                        long intervalNs = getIntervalNanos(key);
+                        double intervalSec = intervalNs / (double) NANOS_IN_SECOND;
+                        Log.info("QI Bars Count V2: Creating accumulator for " + alias + 
+                                 " with interval=" + String.format("%.2f", intervalSec) + "s (" + intervalNs + "ns)");
+                        return new BarAccumulator(intervalNs);
+                    });
                     CompletedBar completedBar = accumulator.onTrade(time, price);
                     if (completedBar == null) {
                         return;
@@ -613,6 +616,9 @@ public class Layer1ApiBarsCountV2 implements
             if (Double.compare(previous, newInterval) == 0) {
                 return;
             }
+            Log.info("QI Bars Count V2: Interval changed for " + alias + 
+                     " from " + String.format("%.2f", previous) + "s to " + 
+                     String.format("%.2f", newInterval) + "s");
             settings.setIntervalSeconds(newInterval);
             settingsChanged(alias, settings);
             resetInstrumentState(alias);
